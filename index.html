@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Rental Manager - MagicDoor Style</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 20px; }
+    h1, h2 { text-align: center; }
+    .section { background: white; padding: 20px; margin: 20px auto; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); max-width: 1100px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
+    th { background: #eee; }
+    .btn { padding: 6px 12px; margin: 5px 0; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 4px; }
+    .btn:hover { background: #0056b3; }
+    textarea { width: 100%; height: 50px; }
+    .export-btn { float: right; margin-top: -40px; }
+  </style>
+  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>
+  <script>
+    window.onload = function () {
+      emailjs.init("YOUR_PUBLIC_KEY"); // Replace with your actual EmailJS public key
+    };
+  </script>
+</head>
+<body>
+
+<h1>Hazel Street Apartments - Manager Dashboard</h1>
+
+<div class="section">
+  <h2>Tenant Directory</h2>
+  <button class="btn" onclick="addTenant()">Add Tenant</button>
+  <table id="tenantTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Unit</th>
+        <th>Email</th>
+        <th>Lease Start</th>
+        <th>Lease End</th>
+        <th>Notes</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Rent Payments</h2>
+  <button class="btn" onclick="addRentRow()">Add Rent Record</button>
+  <button class="btn export-btn" onclick="exportTableToCSV('rentTable', 'rent_records.csv')">Export</button>
+  <table id="rentTable">
+    <thead>
+      <tr>
+        <th>Tenant</th>
+        <th>Unit</th>
+        <th>Amount (TTD)</th>
+        <th>Due Date</th>
+        <th>Status</th>
+        <th>Notes</th>
+        <th>Send Reminder</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Maintenance Log</h2>
+  <button class="btn" onclick="addMaintenanceRow()">Add Maintenance Record</button>
+  <button class="btn export-btn" onclick="exportTableToCSV('maintenanceTable', 'maintenance_log.csv')">Export</button>
+  <table id="maintenanceTable">
+    <thead>
+      <tr>
+        <th>Unit</th>
+        <th>Issue</th>
+        <th>Status</th>
+        <th>Date Reported</th>
+        <th>Resolution Notes</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+  function addTenant() {
+    const table = document.getElementById('tenantTable').getElementsByTagName('tbody')[0];
+    const row = table.insertRow();
+    row.innerHTML = \`
+      <td contenteditable="true">Tenant Name</td>
+      <td contenteditable="true">Unit #</td>
+      <td contenteditable="true">email@example.com</td>
+      <td contenteditable="true">YYYY-MM-DD</td>
+      <td contenteditable="true">YYYY-MM-DD</td>
+      <td><textarea placeholder="Notes..."></textarea></td>
+      <td><button class="btn" onclick="deleteRow(this)">Delete</button></td>
+    \`;
+  }
+
+  function addRentRow() {
+    const table = document.getElementById('rentTable').getElementsByTagName('tbody')[0];
+    const row = table.insertRow();
+    row.innerHTML = \`
+      <td contenteditable="true">Tenant Name</td>
+      <td contenteditable="true">Unit #</td>
+      <td contenteditable="true">0.00</td>
+      <td contenteditable="true">YYYY-MM-DD</td>
+      <td contenteditable="true">Pending</td>
+      <td><textarea placeholder="Payment notes..."></textarea></td>
+      <td><button class="btn" onclick="sendReminder(this)">Send</button></td>
+      <td><button class="btn" onclick="deleteRow(this)">Delete</button></td>
+    \`;
+  }
+
+  function addMaintenanceRow() {
+    const table = document.getElementById('maintenanceTable').getElementsByTagName('tbody')[0];
+    const row = table.insertRow();
+    row.innerHTML = \`
+      <td contenteditable="true">Unit #</td>
+      <td contenteditable="true">Issue Description</td>
+      <td contenteditable="true">Open</td>
+      <td contenteditable="true">YYYY-MM-DD</td>
+      <td><textarea placeholder="Resolution notes..."></textarea></td>
+      <td><button class="btn" onclick="deleteRow(this)">Delete</button></td>
+    \`;
+  }
+
+  function deleteRow(btn) {
+    btn.closest('tr').remove();
+  }
+
+  function sendReminder(btn) {
+    const row = btn.closest('tr');
+    const tenant = row.cells[0].innerText;
+    const unit = row.cells[1].innerText;
+    const amount = row.cells[2].innerText;
+    const dueDate = row.cells[3].innerText;
+
+    const templateParams = {
+      tenant_name: tenant,
+      unit_number: unit,
+      due_amount: amount,
+      due_date: dueDate,
+      to_email: "hazelstreetapt@gmail.com"
+    };
+
+    emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", templateParams)
+      .then(response => alert("Reminder sent to " + tenant))
+      .catch(error => alert("Failed: " + JSON.stringify(error)));
+  }
+
+  function exportTableToCSV(tableId, filename) {
+    const csv = [];
+    const rows = document.querySelectorAll("#" + tableId + " tr");
+    for (let row of rows) {
+      const cols = row.querySelectorAll("td, th");
+      const csvRow = [];
+      for (let col of cols) {
+        csvRow.push('"' + col.innerText.replace(/"/g, '""') + '"');
+      }
+      csv.push(csvRow.join(","));
+    }
+
+    const csvBlob = new Blob([csv.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(csvBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+
+</body>
+</html>
