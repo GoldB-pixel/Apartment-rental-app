@@ -1,64 +1,480 @@
 
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Hazel Street Rental Manager</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js">
-function checkLeaseExpirations() {
-  const today = new Date().toISOString().split('T')[0];
-  const rows = document.querySelectorAll('#tenantTable tbody tr');
-  rows.forEach(row => {
-    const endDateInput = row.querySelectorAll('input[type="date"]')[1];
-    if (endDateInput && endDateInput.value && endDateInput.value < today) {
-      row.style.backgroundColor = "#ffe5e5"; // Light red background
-      if (!row.dataset.alerted) {
-        alert(`Lease expired for: ${row.children[0].textContent}`);
-        row.dataset.alerted = "true";
+<meta charset="utf-8"/>
+<title>Hazel Street Rental Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js">
+function calculateRentSummary() {
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const rentAmount = parseFloat(row.children[2]?.textContent) || 0;
+
+    // Payment values
+    let totalPaid = 0;
+    for (let i = 0; i < 3; i++) {
+      const amountInput = row.children[5 + i]?.querySelector('input[type="number"]');
+      if (amountInput && amountInput.value) {
+        totalPaid += parseFloat(amountInput.value) || 0;
       }
+    }
+
+    // Late fee calculation
+    const feeCell = row.children[4];
+    const feeInput = feeCell?.querySelector('input[type="number"]');
+    const feeType = feeCell?.querySelector('input[type="radio"]:checked')?.value;
+    let lateFee = 0;
+    if (feeInput && feeInput.value) {
+      lateFee = parseFloat(feeInput.value) || 0;
+      if (feeType === "percent") {
+        lateFee = (lateFee / 100) * rentAmount;
+      }
+    }
+
+    const totalDue = rentAmount + lateFee;
+    const balance = Math.max(0, totalDue - totalPaid);
+
+    row.children[8].textContent = `$${totalPaid.toFixed(2)}`;
+    row.children[9].textContent = `$${balance.toFixed(2)}`;
+
+    const statusCell = row.children[10];
+    if (balance <= 0) {
+      statusCell.innerHTML = '<span style="color:green;">Paid</span>';
+    } else if (totalPaid > 0) {
+      statusCell.innerHTML = '<span style="color:orange;">Partial</span>';
+    } else {
+      statusCell.innerHTML = '<span style="color:red;">Unpaid</span>';
     }
   });
 }
-setInterval(checkLeaseExpirations, 10000);
+setInterval(calculateRentSummary, 3000);
 
 
-function checkOverdueMaintenance() {
-  const today = new Date().toISOString().split('T')[0];
-  const rows = document.querySelectorAll('#maintenanceTable tbody tr');
-  rows.forEach(row => {
-    const status = row.querySelector('select')?.value;
-    const targetDate = row.querySelectorAll('input[type="date"]')[1];
-    if (status !== 'Resolved' && targetDate?.value && targetDate.value < today) {
-      row.style.backgroundColor = "#fff3cd"; // light yellow for overdue
-      if (!row.dataset.reminded) {
-        alert(`⚠️ Overdue maintenance for unit: ${row.children[0].textContent}`);
-        row.dataset.reminded = "true";
-      }
+const unitRentMap = {
+  '101': 1200,
+  '102': 1150,
+  '103': 1250,
+  '201': 1300,
+  '202': 1100
+};
+
+function setupAutoFillRent() {
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const unitDropdown = row.children[1]?.querySelector('select');
+    const rentCell = row.children[2];
+
+    if (unitDropdown) {
+      unitDropdown.addEventListener('change', () => {
+        const selected = unitDropdown.value;
+        if (unitRentMap[selected] && rentCell) {
+          rentCell.textContent = unitRentMap[selected].toFixed(2);
+        }
+      });
     }
   });
 }
-setInterval(checkOverdueMaintenance, 10000);
 
+setInterval(setupAutoFillRent, 3000);
+
+
+function exportToCSV() {
+  const rows = document.querySelectorAll("#rentTable tr");
+  let csvContent = "";
+  rows.forEach(row => {
+    const cols = row.querySelectorAll("th, td");
+    const rowData = Array.from(cols).map(col => col.innerText.replace(/\n/g, " ")).join(",");
+    csvContent += rowData + "\n";
+  });
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", "rent_records.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+
+function exportTableToCSV(tableId, filename) {
+  const rows = document.querySelectorAll(`#${tableId} tr`);
+  let csvContent = "";
+  rows.forEach(row => {
+    const cols = row.querySelectorAll("th, td");
+    const rowData = Array.from(cols).map(col => col.innerText.replace(/\n/g, " ")).join(",");
+    csvContent += rowData + "\n";
+  });
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function printSection(sectionId) {
+  const printContent = document.getElementById(sectionId).innerHTML;
+  const originalContent = document.body.innerHTML;
+  document.body.innerHTML = printContent;
+  window.print();
+  document.body.innerHTML = originalContent;
+  location.reload();
+}
+
+
+function showGroupedRentReport() {
+  const data = {};
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.querySelector('select')?.value || 'Unknown';
+    const amount = parseFloat(row.children[2]?.innerText) || 0;
+    let paid = 0;
+    for (let i = 0; i < 3; i++) {
+      const pay = row.children[5 + i]?.querySelector('input[type="number"]');
+      if (pay && pay.value) paid += parseFloat(pay.value) || 0;
+    }
+
+    if (!data[unit]) data[unit] = { due: 0, paid: 0 };
+    data[unit].due += amount;
+    data[unit].paid += paid;
+  });
+
+  const container = document.getElementById('rentSummaryContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Unit</th><th>Due</th><th>Paid</th><th>Balance</th></tr>';
+  for (const unit in data) {
+    const row = document.createElement('tr');
+    const balance = data[unit].due - data[unit].paid;
+    row.innerHTML = `<td>${unit}</td><td>$${data[unit].due.toFixed(2)}</td>
+                     <td>$${data[unit].paid.toFixed(2)}</td><td>$${balance.toFixed(2)}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('rentGroupChart').getContext('2d');
+  const labels = Object.keys(data);
+  const paidData = labels.map(u => data[u].paid);
+  const dueData = labels.map(u => data[u].due);
+  if (window.rentGroupChart) window.rentGroupChart.destroy();
+  window.rentGroupChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Paid', data: paidData, backgroundColor: '#1cc88a' },
+        { label: 'Due', data: dueData, backgroundColor: '#f6c23e' }
+      ]
+    }
+  });
+
+  document.getElementById('rentGroupReport').style.display = 'block';
+  window.print();
+  document.getElementById('rentGroupReport').style.display = 'none';
+}
+
+
+function showMonthGroupedRentReport() {
+  const data = {};
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const dueDate = row.children[3]?.querySelector('input[type="date"]')?.value;
+    const amount = parseFloat(row.children[2]?.innerText) || 0;
+    let paid = 0;
+    for (let i = 0; i < 3; i++) {
+      const pay = row.children[5 + i]?.querySelector('input[type="number"]');
+      if (pay && pay.value) paid += parseFloat(pay.value) || 0;
+    }
+
+    if (dueDate) {
+      const month = dueDate.substring(0, 7); // YYYY-MM
+      if (!data[month]) data[month] = { due: 0, paid: 0 };
+      data[month].due += amount;
+      data[month].paid += paid;
+    }
+  });
+
+  const container = document.getElementById('rentMonthContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Month</th><th>Due</th><th>Paid</th><th>Balance</th></tr>';
+  for (const month in data) {
+    const row = document.createElement('tr');
+    const balance = data[month].due - data[month].paid;
+    row.innerHTML = `<td>${month}</td><td>$${data[month].due.toFixed(2)}</td>
+                     <td>$${data[month].paid.toFixed(2)}</td><td>$${balance.toFixed(2)}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('rentMonthChart').getContext('2d');
+  const labels = Object.keys(data);
+  const paidData = labels.map(m => data[m].paid);
+  const dueData = labels.map(m => data[m].due);
+  if (window.rentMonthChart) window.rentMonthChart.destroy();
+  window.rentMonthChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Paid', data: paidData, backgroundColor: '#36b9cc' },
+        { label: 'Due', data: dueData, backgroundColor: '#f6c23e' }
+      ]
+    }
+  });
+
+  document.getElementById('rentMonthReport').style.display = 'block';
+  window.print();
+  document.getElementById('rentMonthReport').style.display = 'none';
+}
+
+
+function showGroupedMaintenanceReport() {
+  const data = {};
+
+  document.querySelectorAll('#maintenanceTable tbody tr').forEach(row => {
+    const unit = row.children[0]?.querySelector('select')?.value || 'Unknown';
+    const issue = row.children[1]?.innerText.trim().toLowerCase();
+    const status = issue.includes('done') || issue.includes('complete') ? 'Completed' : 'Pending';
+
+    if (!data[unit]) data[unit] = { Pending: 0, Completed: 0 };
+    data[unit][status]++;
+  });
+
+  const container = document.getElementById('maintenanceSummaryContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Unit</th><th>Pending</th><th>Completed</th></tr>';
+  for (const unit in data) {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${unit}</td><td>${data[unit].Pending}</td><td>${data[unit].Completed}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('maintenanceGroupChart').getContext('2d');
+  const labels = Object.keys(data);
+  const pendingData = labels.map(u => data[u].Pending);
+  const completedData = labels.map(u => data[u].Completed);
+  if (window.maintenanceGroupChart) window.maintenanceGroupChart.destroy();
+  window.maintenanceGroupChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Pending', data: pendingData, backgroundColor: '#e74a3b' },
+        { label: 'Completed', data: completedData, backgroundColor: '#1cc88a' }
+      ]
+    }
+  });
+
+  document.getElementById('maintenanceGroupReport').style.display = 'block';
+  window.print();
+  document.getElementById('maintenanceGroupReport').style.display = 'none';
+}
+
+
+function showGroupedTenantReport() {
+  const data = {};
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.innerText || 'Unknown';
+    const leaseEnd = row.children[3]?.innerText || 'Unknown';
+
+    if (!data[unit]) data[unit] = { count: 0 };
+    data[unit].count++;
+  });
+
+  const container = document.getElementById('tenantSummaryContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Unit</th><th>Tenants</th></tr>';
+  for (const unit in data) {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${unit}</td><td>${data[unit].count}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('tenantGroupChart').getContext('2d');
+  const labels = Object.keys(data);
+  const tenantCounts = labels.map(u => data[u].count);
+  if (window.tenantGroupChart) window.tenantGroupChart.destroy();
+  window.tenantGroupChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Number of Tenants', data: tenantCounts, backgroundColor: '#4e73df' }
+      ]
+    }
+  });
+
+  document.getElementById('tenantGroupReport').style.display = 'block';
+  window.print();
+  document.getElementById('tenantGroupReport').style.display = 'none';
+}
+
+
+function checkLeaseExpiry() {
+  const today = new Date();
+  const warningDays = 30;
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const leaseEndCell = row.children[3];
+    const leaseEndDateStr = leaseEndCell?.innerText || '';
+    if (!leaseEndDateStr) return;
+
+    const leaseEndDate = new Date(leaseEndDateStr);
+    const timeDiff = leaseEndDate - today;
+    const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+    if (daysRemaining <= warningDays && daysRemaining >= 0) {
+      leaseEndCell.style.backgroundColor = "#fff3cd";
+      leaseEndCell.title = `Lease expiring in ${daysRemaining} days`;
+    } else if (daysRemaining < 0) {
+      leaseEndCell.style.backgroundColor = "#f8d7da";
+      leaseEndCell.title = `Lease expired ${Math.abs(daysRemaining)} days ago`;
+    } else {
+      leaseEndCell.style.backgroundColor = "";
+      leaseEndCell.title = "";
+    }
+  });
+}
+
+setInterval(checkLeaseExpiry, 3000);
+
+
+function showLeaseExpirySummary() {
+  const today = new Date();
+  const soonCutoff = new Date();
+  soonCutoff.setDate(today.getDate() + 30);
+  let expiringSoon = 0;
+  let expired = 0;
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const leaseEndStr = row.children[3]?.innerText || '';
+    if (!leaseEndStr) return;
+    const leaseEndDate = new Date(leaseEndStr);
+    if (leaseEndDate < today) {
+      expired++;
+    } else if (leaseEndDate <= soonCutoff) {
+      expiringSoon++;
+    }
+  });
+
+  const div = document.getElementById('leaseExpirySummary');
+  div.innerHTML = `
+    <table>
+      <tr><th>Lease Status</th><th>Count</th></tr>
+      <tr><td>Expiring within 30 days</td><td>${expiringSoon}</td></tr>
+      <tr><td>Expired</td><td>${expired}</td></tr>
+    </table>
+  `;
+}
+
+setInterval(() => {
+  if (document.getElementById('dashboard').style.display !== 'none') {
+    showLeaseExpirySummary();
+  }
+}, 3000);
+
+
+function updateOccupancySummary() {
+  const unitSet = new Set();
+  const assignedUnits = new Set();
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.innerText?.trim();
+    if (unit) {
+      unitSet.add(unit);
+      assignedUnits.add(unit);
+    }
+  });
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const unitSelect = row.children[1]?.querySelector('select');
+    if (unitSelect && unitSelect.value) {
+      unitSet.add(unitSelect.value);
+    }
+  });
+
+  const totalUnits = unitSet.size;
+  const occupied = assignedUnits.size;
+  const vacant = totalUnits - occupied;
+
+  document.getElementById('occupancySummary').innerHTML = `
+    <table>
+      <tr><th>Occupancy</th><th>Count</th></tr>
+      <tr><td>Total Units</td><td>${totalUnits}</td></tr>
+      <tr><td>Occupied Units</td><td>${occupied}</td></tr>
+      <tr><td>Vacant Units</td><td>${vacant}</td></tr>
+    </table>
+  `;
+}
+
+function updateRentDueSummary() {
+  const today = new Date();
+  const weekLater = new Date();
+  weekLater.setDate(today.getDate() + 7);
+  let totalDue = 0;
+  let count = 0;
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const dueInput = row.children[3]?.querySelector('input[type="date"]');
+    const amountText = row.children[2]?.innerText;
+    if (dueInput && dueInput.value) {
+      const dueDate = new Date(dueInput.value);
+      if (dueDate >= today && dueDate <= weekLater) {
+        count++;
+        const rentAmount = parseFloat(amountText) || 0;
+        totalDue += rentAmount;
+      }
+    }
+  });
+
+  document.getElementById('rentDueSummary').innerHTML = `
+    <table>
+      <tr><th>Upcoming Rent</th><th>Value</th></tr>
+      <tr><td>Due in next 7 days</td><td>${count} records</td></tr>
+      <tr><td>Total Amount</td><td>$${totalDue.toFixed(2)}</td></tr>
+    </table>
+  `;
+}
+
+setInterval(() => {
+  if (document.getElementById('dashboard').style.display !== 'none') {
+    showLeaseExpirySummary();
+    updateOccupancySummary();
+    updateRentDueSummary();
+  }
+}, 3000);
+
+
+function showTab(tabId) {
+  const tabIds = ['tenantSection', 'rentSection', 'maintenanceSection', 'reports', 'dashboard'];
+  tabIds.forEach(id => {
+    const tab = document.getElementById(id);
+    if (tab) {
+      tab.style.display = (id === tabId) ? 'block' : 'none';
+    }
+  });
+}
 </script>
-  <style>
+<style>
     body {
       margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: #f8f9fc;
-      color: #5a5c69;
+      font-family: Arial, sans-serif;
+      background: #f4f6f9;
       display: flex;
     }
     .sidebar {
       width: 240px;
       background: #4e73df;
       color: white;
+      padding: 20px;
       height: 100vh;
       position: fixed;
-      display: flex;
-      flex-direction: column;
-      padding: 20px 10px;
-      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     }
     .sidebar h2 {
       text-align: center;
@@ -74,7 +490,7 @@ setInterval(checkOverdueMaintenance, 10000);
       cursor: pointer;
     }
     .sidebar button:hover, .sidebar button.active {
-      background: #2e59d9;
+      background-color: #2e59d9;
       color: white;
     }
     .main {
@@ -92,21 +508,6 @@ setInterval(checkOverdueMaintenance, 10000);
     .section.active {
       display: block;
     }
-    h2 {
-      margin-top: 0;
-      color: #4e73df;
-      border-bottom: 2px solid #4e73df;
-      padding-bottom: 5px;
-    }
-    .btn {
-      background: #4e73df;
-      color: white;
-      border: none;
-      padding: 8px 12px;
-      cursor: pointer;
-      border-radius: 4px;
-      font-size: 14px;
-    }
     table {
       width: 100%;
       margin-top: 15px;
@@ -119,106 +520,284 @@ setInterval(checkOverdueMaintenance, 10000);
     th {
       background: #f1f3f9;
     }
-  </style>
+    .btn {
+      background: #4e73df;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+  
+    .dashboard-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+    }
+    .dashboard-table th, .dashboard-table td {
+        padding: 0.5rem;
+        border: 1px solid #ddd;
+        text-align: left;
+    }
+    .dashboard-table th {
+        background-color: #f8f9fc;
+    }
+    .dashboard-table tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+    
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      display: flex;
+    }
+    .sidebar {
+      width: 220px;
+      background: #343a40;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .sidebar a {
+      padding: 1rem;
+      color: white;
+      text-decoration: none;
+      border-bottom: 1px solid #495057;
+    }
+    .sidebar a:hover {
+      background-color: #495057;
+    }
+    .main {
+      flex-grow: 1;
+      padding: 1rem;
+      background: #f8f9fc;
+      overflow-y: auto;
+    }
+    h2 {
+      margin-top: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    table, th, td {
+      border: 1px solid #dee2e6;
+    }
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+    }
+    th {
+      background-color: #e9ecef;
+    }
+    input, select, button {
+      margin: 0.25rem;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      margin: 0.5rem 0.5rem 0.5rem 0;
+      background-color: #007bff;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    canvas {
+      display: block;
+      margin: 1rem 0;
+      max-width: 100%;
+    }
+    
+    html, body {
+        height: 100%;
+        margin: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+        display: flex;
+        overflow: hidden;
+    }
+    .sidebar {
+        width: 220px;
+        background-color: #343a40;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        padding-top: 1rem;
+        height: 100vh;
+        overflow-y: auto;
+    }
+    .sidebar a {
+        padding: 0.75rem 1rem;
+        text-decoration: none;
+        color: #fff;
+        transition: background-color 0.3s;
+        border-bottom: 1px solid #495057;
+    }
+    .sidebar a:hover {
+        background-color: #495057;
+    }
+    .main {
+        flex: 1;
+        padding: 1rem;
+        overflow-y: auto;
+        background-color: #f8f9fc;
+        height: 100vh;
+    }
+    h2 {
+        margin-top: 0;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+    }
+    th, td {
+        padding: 0.75rem;
+        border: 1px solid #dee2e6;
+        text-align: left;
+    }
+    th {
+        background-color: #e9ecef;
+    }
+    tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+    .btn {
+        padding: 0.5rem 1rem;
+        margin: 0.5rem 0.5rem 0.5rem 0;
+        background-color: #007bff;
+        border: none;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .btn:hover {
+        background-color: #0056b3;
+    }
+    input, select {
+        padding: 0.4rem;
+        margin: 0.25rem 0.25rem 0.25rem 0;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+    canvas {
+        max-width: 100%;
+        margin: 1rem 0;
+        display: block;
+    }
+    </style>
 </head>
 <body>
-
 <div class="sidebar">
-  <h2>Hazel Street</h2>
-  <button class="tab-btn active" onclick="showSection('tenantSection', this)">👥 Tenants</button>
-  <button class="tab-btn" onclick="showSection('rentSection', this)">🏠 Rent</button>
-  <button class="tab-btn" onclick="showSection('maintenanceSection', this)">🛠 Maintenance</button>
-  <button class="tab-btn" onclick="showSection('reportSection', this)">📊 Reports</button>
+<a href="#" onclick="showTab('dashboard')">📋 Dashboard</a>
+<h2>Hazel Street</h2>
+<button class="tab-btn active" onclick="showSection('tenantSection', this)">👥 Tenants</button>
+<button class="tab-btn" onclick="showSection('rentSection', this)">🏠 Rent</button>
+<button class="tab-btn" onclick="showSection('maintenanceSection', this)">🛠 Maintenance</button>
+<button class="tab-btn" onclick="showSection('reportSection', this)">📊 Reports</button>
+<div id="rentGroupReport" style="display:none;">
+<h2>Rent Summary by Unit</h2>
+<div id="rentSummaryContainer"></div>
+<canvas height="200" id="rentGroupChart" width="400"></canvas>
 </div>
-
+<div id="rentMonthReport" style="display:none;">
+<h2>Rent Summary by Month</h2>
+<div id="rentMonthContainer"></div>
+<canvas height="200" id="rentMonthChart" width="400"></canvas>
+</div>
+<div id="maintenanceGroupReport" style="display:none;">
+<h2>Maintenance Summary</h2>
+<div id="maintenanceSummaryContainer"></div>
+<canvas height="200" id="maintenanceGroupChart" width="400"></canvas>
+</div>
+<div id="tenantGroupReport" style="display:none;">
+<h2>Tenant Summary</h2>
+<div id="tenantSummaryContainer"></div>
+<canvas height="200" id="tenantGroupChart" width="400"></canvas>
+</div>
 <div class="main">
-  <div class="section active" id="tenantSection">
-    <h2>Tenants</h2>
-    <button class="btn" onclick="addTenantRow()">Add Tenant</button>
-    <table id="tenantTable">
-      <thead>
-        <tr><th>Name</th><th>Unit</th><th>Email</th><th>Lease Start</th><th>Lease End</th><th>Actions</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <div class="section" id="rentSection">
-    <h2>Rent</h2>
-    <button class="btn" onclick="addRentRow()">Add Rent</button>
-    <table id="rentTable">
-      <thead>
-        <tr><th>Tenant</th><th>Unit</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Reminder</th><th>Actions</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <div class="section" id="maintenanceSection">
-    <h2>Maintenance</h2>
-    <button class="btn" onclick="addMaintenanceRow()">Add Maintenance</button>
-    <table id="maintenanceTable">
-      <thead>
-        <tr><th>Unit</th><th>Issue</th><th>Status</th><th>Date Reported</th><th>Target Completion</th><th>Actions</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <div class="section" id="reportSection">
-    <h2>Reports</h2>
-    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
-      <div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #4e73df; border-radius:5px;">
-        <strong>Total Tenants:</strong> <span id="reportTotalTenants">0</span>
-      </div>
-      <div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #1cc88a; border-radius:5px;">
-        <strong>Total Rent Records:</strong> <span id="reportTotalRent">0</span>
-      </div>
-      <div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #e74a3b; border-radius:5px;">
-        <strong>Overdue Maintenance:</strong> <span id="reportOverdueMaint">0</span>
-      </div>
-    </div>
-    <canvas id="rentChart" width="400" height="200"></canvas>
-  </div>
+<div class="section" id="reportSection">
+<h2>Reports</h2>
+<div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+<div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #4e73df; border-radius:5px;">
+<strong>Total Tenants:</strong> <span id="reportTotalTenants">0</span>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js">
-function checkLeaseExpirations() {
-  const today = new Date().toISOString().split('T')[0];
-  const rows = document.querySelectorAll('#tenantTable tbody tr');
-  rows.forEach(row => {
-    const endDateInput = row.querySelectorAll('input[type="date"]')[1];
-    if (endDateInput && endDateInput.value && endDateInput.value < today) {
-      row.style.backgroundColor = "#ffe5e5"; // Light red background
-      if (!row.dataset.alerted) {
-        alert(`Lease expired for: ${row.children[0].textContent}`);
-        row.dataset.alerted = "true";
-      }
-    }
-  });
+<div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #1cc88a; border-radius:5px;">
+<strong>Total Rent Records:</strong> <span id="reportTotalRent">0</span>
+</div>
+<div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #e74a3b; border-radius:5px;">
+<strong>Overdue Maintenance:</strong> <span id="reportOverdueMaint">0</span>
+</div>
+</div>
+<canvas height="200" id="rentChart" width="400"></canvas>
+</div>
+<div class="section active" id="tenantSection" style="display: block; padding: 1rem; background-color: #f8f9fc;">
+<button class="btn" id="exportTenantsBtn" onclick="exportTableToCSV('tenantSectionTable')">📁 Export Tenants</button><h2>Tenants</h2>
+<button class="btn" onclick="exportTableToCSV('tenantTable', 'tenants.csv')">📤 Export to Excel</button>
+<button class="btn" onclick="showGroupedRentReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="showMonthGroupedRentReport()">🗓 Grouped by Month</button>
+<button class="btn" onclick="printSection('tenantSection')">🖨 Print as PDF</button>
+<button class="btn" onclick="showGroupedTenantReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="showGroupedMaintenanceReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="addTenantRow()">Add Tenant</button>
+<table id="tenantTable">
+<thead>
+<tr><th>Tenant Name(s)</th><th>Unit</th><th>Email(s)</th><th>Lease Start</th><th>Lease End</th><th>Actions</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+</div><div class="section" id="rentSection" style="display: none; padding: 1rem; background-color: #f8f9fc;">
+<button class="btn" id="exportRentBtn" onclick="exportTableToCSV('rentSectionTable')">📁 Export Rent</button><h2>Rent</h2>
+<button class="btn" onclick="exportToCSV()">📤 Export to Excel</button>
+<button class="btn" onclick="showGroupedRentReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="showMonthGroupedRentReport()">🗓 Grouped by Month</button>
+<button class="btn" onclick="window.print()">🖨 Print as PDF</button>
+<button class="btn" onclick="showGroupedTenantReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="showGroupedMaintenanceReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="addRentRow()">Add Rent</button>
+<table id="rentTable">
+<thead>
+<tr><th>Tenant</th><th>Unit</th><th>Amount</th><th>Due Date</th><th>Late Fee</th><th>Payment 1</th><th>Payment 2</th><th>Payment 3</th><th>Paid</th><th>Balance</th><th>Status</th><th>Reminder</th><th>Actions</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+</div><div class="section" id="maintenanceSection" style="display: none; padding: 1rem; background-color: #f8f9fc;">
+<button class="btn" id="exportMaintenanceBtn" onclick="exportTableToCSV('maintenanceSectionTable')">📁 Export Maintenance</button><h2>Maintenance</h2>
+<button class="btn" onclick="exportTableToCSV('maintenanceTable', 'maintenance.csv')">📤 Export to Excel</button>
+<button class="btn" onclick="showGroupedRentReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="showMonthGroupedRentReport()">🗓 Grouped by Month</button>
+<button class="btn" onclick="printSection('maintenanceSection')">🖨 Print as PDF</button>
+<button class="btn" onclick="showGroupedTenantReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="showGroupedMaintenanceReport()">📊 Grouped Report + Chart</button>
+<button class="btn" onclick="addMaintenanceRow()">Add Maintenance</button>
+<table id="maintenanceTable">
+<thead>
+<tr><th>Unit</th><th>Issue</th><th>Status</th><th>Date Reported</th><th>Target Completion</th><th>Actions</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+</div><div id="dashboard" style="display: none; padding: 1rem; background-color: #f8f9fc;">
+<h2>📋 Dashboard Overview</h2>
+<div id="leaseExpirySummary"></div>
+<br/>
+<div id="occupancySummary"></div>
+<br/>
+<div id="rentDueSummary"></div>
+</div></div>
+<style>
+canvas {
+  display: block;
+  margin: 1rem 0;
+  max-width: 100%;
 }
-setInterval(checkLeaseExpirations, 10000);
-
-
-function checkOverdueMaintenance() {
-  const today = new Date().toISOString().split('T')[0];
-  const rows = document.querySelectorAll('#maintenanceTable tbody tr');
-  rows.forEach(row => {
-    const status = row.querySelector('select')?.value;
-    const targetDate = row.querySelectorAll('input[type="date"]')[1];
-    if (status !== 'Resolved' && targetDate?.value && targetDate.value < today) {
-      row.style.backgroundColor = "#fff3cd"; // light yellow for overdue
-      if (!row.dataset.reminded) {
-        alert(`⚠️ Overdue maintenance for unit: ${row.children[0].textContent}`);
-        row.dataset.reminded = "true";
-      }
-    }
-  });
-}
-setInterval(checkOverdueMaintenance, 10000);
-
-</script>
-<script>
+</style><script>
 function showSection(id, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -229,26 +808,114 @@ function showSection(id, btn) {
 
 function addTenantRow() {
   const row = document.createElement('tr');
-  row.innerHTML = '<td contenteditable>Tenant Name</td><td contenteditable>Unit</td><td contenteditable>email@example.com</td><td><input type="date"></td><td><input type="date"></td><td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
+  row.innerHTML = '<td contenteditable>Tenant 1, Tenant 2</td><td contenteditable>Unit</td><td contenteditable>email@example.com</td>' +
+                   '<td><input type="date"></td><td><input type="date"></td>' +
+                   '<td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
   document.querySelector('#tenantTable tbody').appendChild(row);
 }
 
 function addRentRow() {
+  populateTenantDropdowns();
   const row = document.createElement('tr');
-  row.innerHTML = '<td contenteditable>Name</td><td contenteditable>Unit</td><td contenteditable>1000</td><td><input type="date"></td>' +
+  row.innerHTML = '<td></td><td></td><td contenteditable>1000</td><td><input type="date"></td>' +
+       '<td><input type="number" placeholder="Late Fee" style="width:80px;"> ' +
+       '<br><label><input type="radio" name="lateFeeType" value="fixed" checked> $</label> ' +
+       '<label><input type="radio" name="lateFeeType" value="percent"> %</label></td>' +
+    '<td>
+  <input type="date" placeholder="Date" style="width: 90px;"><br>
+  <input type="number" placeholder="Amount" style="width: 80px;"><br>
+  <select>
+    <option>Cash</option>
+    <option>Bank Transfer</option>
+    <option>Cheque</option>
+    <option>Other</option>
+  </select>
+</td>' +
+    '<td>
+  <input type="date" placeholder="Date" style="width: 90px;"><br>
+  <input type="number" placeholder="Amount" style="width: 80px;"><br>
+  <select>
+    <option>Cash</option>
+    <option>Bank Transfer</option>
+    <option>Cheque</option>
+    <option>Other</option>
+  </select>
+</td>' +
+    '<td>
+  <input type="date" placeholder="Date" style="width: 90px;"><br>
+  <input type="number" placeholder="Amount" style="width: 80px;"><br>
+  <select>
+    <option>Cash</option>
+    <option>Bank Transfer</option>
+    <option>Cheque</option>
+    <option>Other</option>
+  </select>
+</td>' +
                   '<td><select><option>Pending</option><option>Paid</option><option>Overdue</option></select></td>' +
                   '<td><button class="btn" onclick="alert(\'Reminder sent\')">Send</button></td>' +
                   '<td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
   document.querySelector('#rentTable tbody').appendChild(row);
+  populateTenantDropdowns();
 }
 
 function addMaintenanceRow() {
   const row = document.createElement('tr');
-  row.innerHTML = '<td contenteditable>Unit</td><td contenteditable>Issue</td>' + '<td><select><option>Open</option><option>In Progress</option><option>Resolved</option></select></td>' + '<td><input type="date"></td>' + '<td><input type="date"></td>' + 
+  row.innerHTML = '<td></td><td contenteditable>Issue</td>' +
                   '<td><select><option>Open</option><option>In Progress</option><option>Resolved</option></select></td>' +
-                  '<td><input type="date"></td>' +
+                  '<td><input type="date"></td><td><input type="date"></td>' +
                   '<td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
   document.querySelector('#maintenanceTable tbody').appendChild(row);
+  populateMaintenanceDropdowns();
+}
+
+function populateTenantDropdowns() {
+  const tenantData = [];
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const names = row.children[0]?.textContent.split(',').map(t => t.trim());
+    const unit = row.children[1]?.textContent.trim();
+    names.forEach(name => {
+      if (name && unit) tenantData.push({ name, unit });
+    });
+  });
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const nameSelect = document.createElement('select');
+    tenantData.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = opt.text = t.name;
+      nameSelect.appendChild(opt);
+    });
+    row.children[0].innerHTML = '';
+    row.children[0].appendChild(nameSelect);
+
+    const unitSelect = document.createElement('select');
+    tenantData.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = opt.text = t.unit;
+      unitSelect.appendChild(opt);
+    });
+    row.children[1].innerHTML = '';
+    row.children[1].appendChild(unitSelect);
+  });
+}
+
+function populateMaintenanceDropdowns() {
+  const units = new Set();
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.textContent.trim();
+    if (unit) units.add(unit);
+  });
+
+  document.querySelectorAll('#maintenanceTable tbody tr').forEach(row => {
+    const unitSelect = document.createElement('select');
+    units.forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = opt.text = u;
+      unitSelect.appendChild(opt);
+    });
+    row.children[0].innerHTML = '';
+    row.children[0].appendChild(unitSelect);
+  });
 }
 
 function generateReport() {
@@ -259,17 +926,16 @@ function generateReport() {
   document.querySelectorAll('#maintenanceTable tbody tr').forEach(row => {
     const status = row.querySelector('select')?.value;
     const target = row.querySelectorAll('input[type="date"]')[1];
-    if (status !== 'Resolved' && target && target.value < today) {
-      overdueCount++;
-    }
+    if (status !== 'Resolved' && target && target.value < today) overdueCount++;
   });
   document.getElementById('reportOverdueMaint').textContent = overdueCount;
+
   const statuses = ['Pending', 'Paid', 'Overdue'];
   const counts = [0, 0, 0];
   document.querySelectorAll('#rentTable tbody tr').forEach(row => {
     const status = row.querySelector('select')?.value;
     const idx = statuses.indexOf(status);
-    if (idx > -1) counts[idx]++;
+    if (idx >= 0) counts[idx]++;
   });
 
   const ctx = document.getElementById('rentChart').getContext('2d');
@@ -287,41 +953,457 @@ function generateReport() {
   });
 }
 
-function checkLeaseExpirations() {
-  const today = new Date().toISOString().split('T')[0];
-  const rows = document.querySelectorAll('#tenantTable tbody tr');
-  rows.forEach(row => {
-    const endDateInput = row.querySelectorAll('input[type="date"]')[1];
-    if (endDateInput && endDateInput.value && endDateInput.value < today) {
-      row.style.backgroundColor = "#ffe5e5"; // Light red background
-      if (!row.dataset.alerted) {
-        alert(`Lease expired for: ${row.children[0].textContent}`);
-        row.dataset.alerted = "true";
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    populateTenantDropdowns();
+    populateMaintenanceDropdowns();
+  }, 1000);
+});
+
+function calculateRentSummary() {
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const rentAmount = parseFloat(row.children[2]?.textContent) || 0;
+
+    // Payment values
+    let totalPaid = 0;
+    for (let i = 0; i < 3; i++) {
+      const amountInput = row.children[5 + i]?.querySelector('input[type="number"]');
+      if (amountInput && amountInput.value) {
+        totalPaid += parseFloat(amountInput.value) || 0;
       }
+    }
+
+    // Late fee calculation
+    const feeCell = row.children[4];
+    const feeInput = feeCell?.querySelector('input[type="number"]');
+    const feeType = feeCell?.querySelector('input[type="radio"]:checked')?.value;
+    let lateFee = 0;
+    if (feeInput && feeInput.value) {
+      lateFee = parseFloat(feeInput.value) || 0;
+      if (feeType === "percent") {
+        lateFee = (lateFee / 100) * rentAmount;
+      }
+    }
+
+    const totalDue = rentAmount + lateFee;
+    const balance = Math.max(0, totalDue - totalPaid);
+
+    row.children[8].textContent = `$${totalPaid.toFixed(2)}`;
+    row.children[9].textContent = `$${balance.toFixed(2)}`;
+
+    const statusCell = row.children[10];
+    if (balance <= 0) {
+      statusCell.innerHTML = '<span style="color:green;">Paid</span>';
+    } else if (totalPaid > 0) {
+      statusCell.innerHTML = '<span style="color:orange;">Partial</span>';
+    } else {
+      statusCell.innerHTML = '<span style="color:red;">Unpaid</span>';
     }
   });
 }
-setInterval(checkLeaseExpirations, 10000);
+setInterval(calculateRentSummary, 3000);
 
 
-function checkOverdueMaintenance() {
-  const today = new Date().toISOString().split('T')[0];
-  const rows = document.querySelectorAll('#maintenanceTable tbody tr');
-  rows.forEach(row => {
-    const status = row.querySelector('select')?.value;
-    const targetDate = row.querySelectorAll('input[type="date"]')[1];
-    if (status !== 'Resolved' && targetDate?.value && targetDate.value < today) {
-      row.style.backgroundColor = "#fff3cd"; // light yellow for overdue
-      if (!row.dataset.reminded) {
-        alert(`⚠️ Overdue maintenance for unit: ${row.children[0].textContent}`);
-        row.dataset.reminded = "true";
-      }
+const unitRentMap = {
+  '101': 1200,
+  '102': 1150,
+  '103': 1250,
+  '201': 1300,
+  '202': 1100
+};
+
+function setupAutoFillRent() {
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const unitDropdown = row.children[1]?.querySelector('select');
+    const rentCell = row.children[2];
+
+    if (unitDropdown) {
+      unitDropdown.addEventListener('change', () => {
+        const selected = unitDropdown.value;
+        if (unitRentMap[selected] && rentCell) {
+          rentCell.textContent = unitRentMap[selected].toFixed(2);
+        }
+      });
     }
   });
 }
-setInterval(checkOverdueMaintenance, 10000);
+
+setInterval(setupAutoFillRent, 3000);
+
+
+function exportToCSV() {
+  const rows = document.querySelectorAll("#rentTable tr");
+  let csvContent = "";
+  rows.forEach(row => {
+    const cols = row.querySelectorAll("th, td");
+    const rowData = Array.from(cols).map(col => col.innerText.replace(/\n/g, " ")).join(",");
+    csvContent += rowData + "\n";
+  });
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", "rent_records.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+
+function exportTableToCSV(tableId, filename) {
+  const rows = document.querySelectorAll(`#${tableId} tr`);
+  let csvContent = "";
+  rows.forEach(row => {
+    const cols = row.querySelectorAll("th, td");
+    const rowData = Array.from(cols).map(col => col.innerText.replace(/\n/g, " ")).join(",");
+    csvContent += rowData + "\n";
+  });
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function printSection(sectionId) {
+  const printContent = document.getElementById(sectionId).innerHTML;
+  const originalContent = document.body.innerHTML;
+  document.body.innerHTML = printContent;
+  window.print();
+  document.body.innerHTML = originalContent;
+  location.reload();
+}
+
+
+function showGroupedRentReport() {
+  const data = {};
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.querySelector('select')?.value || 'Unknown';
+    const amount = parseFloat(row.children[2]?.innerText) || 0;
+    let paid = 0;
+    for (let i = 0; i < 3; i++) {
+      const pay = row.children[5 + i]?.querySelector('input[type="number"]');
+      if (pay && pay.value) paid += parseFloat(pay.value) || 0;
+    }
+
+    if (!data[unit]) data[unit] = { due: 0, paid: 0 };
+    data[unit].due += amount;
+    data[unit].paid += paid;
+  });
+
+  const container = document.getElementById('rentSummaryContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Unit</th><th>Due</th><th>Paid</th><th>Balance</th></tr>';
+  for (const unit in data) {
+    const row = document.createElement('tr');
+    const balance = data[unit].due - data[unit].paid;
+    row.innerHTML = `<td>${unit}</td><td>$${data[unit].due.toFixed(2)}</td>
+                     <td>$${data[unit].paid.toFixed(2)}</td><td>$${balance.toFixed(2)}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('rentGroupChart').getContext('2d');
+  const labels = Object.keys(data);
+  const paidData = labels.map(u => data[u].paid);
+  const dueData = labels.map(u => data[u].due);
+  if (window.rentGroupChart) window.rentGroupChart.destroy();
+  window.rentGroupChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Paid', data: paidData, backgroundColor: '#1cc88a' },
+        { label: 'Due', data: dueData, backgroundColor: '#f6c23e' }
+      ]
+    }
+  });
+
+  document.getElementById('rentGroupReport').style.display = 'block';
+  window.print();
+  document.getElementById('rentGroupReport').style.display = 'none';
+}
+
+
+function showMonthGroupedRentReport() {
+  const data = {};
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const dueDate = row.children[3]?.querySelector('input[type="date"]')?.value;
+    const amount = parseFloat(row.children[2]?.innerText) || 0;
+    let paid = 0;
+    for (let i = 0; i < 3; i++) {
+      const pay = row.children[5 + i]?.querySelector('input[type="number"]');
+      if (pay && pay.value) paid += parseFloat(pay.value) || 0;
+    }
+
+    if (dueDate) {
+      const month = dueDate.substring(0, 7); // YYYY-MM
+      if (!data[month]) data[month] = { due: 0, paid: 0 };
+      data[month].due += amount;
+      data[month].paid += paid;
+    }
+  });
+
+  const container = document.getElementById('rentMonthContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Month</th><th>Due</th><th>Paid</th><th>Balance</th></tr>';
+  for (const month in data) {
+    const row = document.createElement('tr');
+    const balance = data[month].due - data[month].paid;
+    row.innerHTML = `<td>${month}</td><td>$${data[month].due.toFixed(2)}</td>
+                     <td>$${data[month].paid.toFixed(2)}</td><td>$${balance.toFixed(2)}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('rentMonthChart').getContext('2d');
+  const labels = Object.keys(data);
+  const paidData = labels.map(m => data[m].paid);
+  const dueData = labels.map(m => data[m].due);
+  if (window.rentMonthChart) window.rentMonthChart.destroy();
+  window.rentMonthChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Paid', data: paidData, backgroundColor: '#36b9cc' },
+        { label: 'Due', data: dueData, backgroundColor: '#f6c23e' }
+      ]
+    }
+  });
+
+  document.getElementById('rentMonthReport').style.display = 'block';
+  window.print();
+  document.getElementById('rentMonthReport').style.display = 'none';
+}
+
+
+function showGroupedMaintenanceReport() {
+  const data = {};
+
+  document.querySelectorAll('#maintenanceTable tbody tr').forEach(row => {
+    const unit = row.children[0]?.querySelector('select')?.value || 'Unknown';
+    const issue = row.children[1]?.innerText.trim().toLowerCase();
+    const status = issue.includes('done') || issue.includes('complete') ? 'Completed' : 'Pending';
+
+    if (!data[unit]) data[unit] = { Pending: 0, Completed: 0 };
+    data[unit][status]++;
+  });
+
+  const container = document.getElementById('maintenanceSummaryContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Unit</th><th>Pending</th><th>Completed</th></tr>';
+  for (const unit in data) {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${unit}</td><td>${data[unit].Pending}</td><td>${data[unit].Completed}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('maintenanceGroupChart').getContext('2d');
+  const labels = Object.keys(data);
+  const pendingData = labels.map(u => data[u].Pending);
+  const completedData = labels.map(u => data[u].Completed);
+  if (window.maintenanceGroupChart) window.maintenanceGroupChart.destroy();
+  window.maintenanceGroupChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Pending', data: pendingData, backgroundColor: '#e74a3b' },
+        { label: 'Completed', data: completedData, backgroundColor: '#1cc88a' }
+      ]
+    }
+  });
+
+  document.getElementById('maintenanceGroupReport').style.display = 'block';
+  window.print();
+  document.getElementById('maintenanceGroupReport').style.display = 'none';
+}
+
+
+function showGroupedTenantReport() {
+  const data = {};
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.innerText || 'Unknown';
+    const leaseEnd = row.children[3]?.innerText || 'Unknown';
+
+    if (!data[unit]) data[unit] = { count: 0 };
+    data[unit].count++;
+  });
+
+  const container = document.getElementById('tenantSummaryContainer');
+  container.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>Unit</th><th>Tenants</th></tr>';
+  for (const unit in data) {
+    const row = document.createElement('tr');
+    row.innerHTML = `<td>${unit}</td><td>${data[unit].count}</td>`;
+    table.appendChild(row);
+  }
+  container.appendChild(table);
+
+  const ctx = document.getElementById('tenantGroupChart').getContext('2d');
+  const labels = Object.keys(data);
+  const tenantCounts = labels.map(u => data[u].count);
+  if (window.tenantGroupChart) window.tenantGroupChart.destroy();
+  window.tenantGroupChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Number of Tenants', data: tenantCounts, backgroundColor: '#4e73df' }
+      ]
+    }
+  });
+
+  document.getElementById('tenantGroupReport').style.display = 'block';
+  window.print();
+  document.getElementById('tenantGroupReport').style.display = 'none';
+}
+
+
+function checkLeaseExpiry() {
+  const today = new Date();
+  const warningDays = 30;
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const leaseEndCell = row.children[3];
+    const leaseEndDateStr = leaseEndCell?.innerText || '';
+    if (!leaseEndDateStr) return;
+
+    const leaseEndDate = new Date(leaseEndDateStr);
+    const timeDiff = leaseEndDate - today;
+    const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+    if (daysRemaining <= warningDays && daysRemaining >= 0) {
+      leaseEndCell.style.backgroundColor = "#fff3cd";
+      leaseEndCell.title = `Lease expiring in ${daysRemaining} days`;
+    } else if (daysRemaining < 0) {
+      leaseEndCell.style.backgroundColor = "#f8d7da";
+      leaseEndCell.title = `Lease expired ${Math.abs(daysRemaining)} days ago`;
+    } else {
+      leaseEndCell.style.backgroundColor = "";
+      leaseEndCell.title = "";
+    }
+  });
+}
+
+setInterval(checkLeaseExpiry, 3000);
+
+
+function showLeaseExpirySummary() {
+  const today = new Date();
+  const soonCutoff = new Date();
+  soonCutoff.setDate(today.getDate() + 30);
+  let expiringSoon = 0;
+  let expired = 0;
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const leaseEndStr = row.children[3]?.innerText || '';
+    if (!leaseEndStr) return;
+    const leaseEndDate = new Date(leaseEndStr);
+    if (leaseEndDate < today) {
+      expired++;
+    } else if (leaseEndDate <= soonCutoff) {
+      expiringSoon++;
+    }
+  });
+
+  const div = document.getElementById('leaseExpirySummary');
+  div.innerHTML = `
+    <table>
+      <tr><th>Lease Status</th><th>Count</th></tr>
+      <tr><td>Expiring within 30 days</td><td>${expiringSoon}</td></tr>
+      <tr><td>Expired</td><td>${expired}</td></tr>
+    </table>
+  `;
+}
+
+setInterval(() => {
+  if (document.getElementById('dashboard').style.display !== 'none') {
+    showLeaseExpirySummary();
+  }
+}, 3000);
+
+
+function updateOccupancySummary() {
+  const unitSet = new Set();
+  const assignedUnits = new Set();
+
+  document.querySelectorAll('#tenantTable tbody tr').forEach(row => {
+    const unit = row.children[1]?.innerText?.trim();
+    if (unit) {
+      unitSet.add(unit);
+      assignedUnits.add(unit);
+    }
+  });
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const unitSelect = row.children[1]?.querySelector('select');
+    if (unitSelect && unitSelect.value) {
+      unitSet.add(unitSelect.value);
+    }
+  });
+
+  const totalUnits = unitSet.size;
+  const occupied = assignedUnits.size;
+  const vacant = totalUnits - occupied;
+
+  document.getElementById('occupancySummary').innerHTML = `
+    <table>
+      <tr><th>Occupancy</th><th>Count</th></tr>
+      <tr><td>Total Units</td><td>${totalUnits}</td></tr>
+      <tr><td>Occupied Units</td><td>${occupied}</td></tr>
+      <tr><td>Vacant Units</td><td>${vacant}</td></tr>
+    </table>
+  `;
+}
+
+function updateRentDueSummary() {
+  const today = new Date();
+  const weekLater = new Date();
+  weekLater.setDate(today.getDate() + 7);
+  let totalDue = 0;
+  let count = 0;
+
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const dueInput = row.children[3]?.querySelector('input[type="date"]');
+    const amountText = row.children[2]?.innerText;
+    if (dueInput && dueInput.value) {
+      const dueDate = new Date(dueInput.value);
+      if (dueDate >= today && dueDate <= weekLater) {
+        count++;
+        const rentAmount = parseFloat(amountText) || 0;
+        totalDue += rentAmount;
+      }
+    }
+  });
+
+  document.getElementById('rentDueSummary').innerHTML = `
+    <table>
+      <tr><th>Upcoming Rent</th><th>Value</th></tr>
+      <tr><td>Due in next 7 days</td><td>${count} records</td></tr>
+      <tr><td>Total Amount</td><td>$${totalDue.toFixed(2)}</td></tr>
+    </table>
+  `;
+}
+
+setInterval(() => {
+  if (document.getElementById('dashboard').style.display !== 'none') {
+    showLeaseExpirySummary();
+    updateOccupancySummary();
+    updateRentDueSummary();
+  }
+}, 3000);
 
 </script>
-
-</body>
+</div></body>
 </html>
