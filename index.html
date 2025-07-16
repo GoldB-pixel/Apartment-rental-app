@@ -1,69 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Hazel Street Rental Manager</title>
   <style>
-    body { font-family: Arial, sans-serif; background: #eef2f5; padding: 20px; }
-    h1, h2 { text-align: center; }
-    .section { background: #fff; padding: 20px; margin: 20px auto; border-radius: 8px; max-width: 1100px; box-shadow: 0 0 8px rgba(0,0,0,0.05); }
-    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-    th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
-    th { background-color: #eee; }
-    .btn { padding: 6px 12px; margin: 5px 0; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 4px; }
-    .btn:hover { background: #0056b3; }
-    textarea { width: 100%; height: 50px; resize: vertical; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+    }
+
+    .sidebar {
+      width: 220px;
+      background: #343a40;
+      color: white;
+      height: 100vh;
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 10px;
+    }
+
+    .sidebar h2 {
+      color: #fff;
+      font-size: 20px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    .sidebar button {
+      background: none;
+      border: none;
+      color: #ddd;
+      text-align: left;
+      padding: 10px 15px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .sidebar button:hover {
+      background: #495057;
+      color: #fff;
+    }
+
+    .main {
+      margin-left: 240px;
+      padding: 20px;
+      flex: 1;
+    }
+
+    .section {
+      background: white;
+      padding: 20px;
+      margin-bottom: 30px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.05);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    th {
+      background-color: #eee;
+    }
+
+    .btn {
+      padding: 6px 12px;
+      margin: 5px 0;
+      cursor: pointer;
+      border: none;
+      background: #007bff;
+      color: white;
+      border-radius: 4px;
+    }
+
+    .btn:hover {
+      background: #0056b3;
+    }
+
+    textarea {
+      width: 100%;
+      height: 50px;
+      resize: vertical;
+    }
   </style>
 </head>
 <body>
 
-<h1>Hazel Street Apartments – Rental Manager</h1>
-
-<div class="section">
-  <h2>Rent Payments</h2>
-  <button class="btn" onclick="addRentRow()">Add Rent Record</button>
-  <table id="rentTable">
-    <thead>
-      <tr>
-        <th>Tenant</th>
-        <th>Unit</th>
-        <th>Amount (TTD)</th>
-        <th>Due Date</th>
-        <th>Status</th>
-        <th>Notes</th>
-        <th>Reminder</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<div class="sidebar">
+  <h2>Hazel Street</h2>
+  <button onclick="scrollToSection('tenantSection')">👥 Tenants</button>
+  <button onclick="scrollToSection('rentSection')">🏠 Rent Payments</button>
+  <button onclick="scrollToSection('maintenanceSection')">🛠 Maintenance</button>
 </div>
 
-<div class="section">
-  <h2>Maintenance Log</h2>
-  <button class="btn" onclick="addMaintenanceRow()">Add Maintenance Record</button>
-  <table id="maintenanceTable">
-    <thead>
-      <tr>
-        <th>Unit</th>
-        <th>Issue</th>
-        <th>Status</th>
-        <th>Date Reported</th>
-        <th>Resolution Notes</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<div class="main">
+  <div class="section" id="tenantSection">
+    <h2>Tenant Directory</h2>
+    <button class="btn" onclick="addTenantRow()">Add Tenant</button>
+    <table id="tenantTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Unit</th>
+          <th>Email</th>
+          <th>Lease Start</th>
+          <th>Lease End</th>
+          <th>Notes</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="section" id="rentSection">
+    <h2>Rent Payments</h2>
+    <button class="btn" onclick="addRentRow()">Add Rent Record</button>
+    <table id="rentTable">
+      <thead>
+        <tr>
+          <th>Tenant</th>
+          <th>Unit</th>
+          <th>Amount (TTD)</th>
+          <th>Due Date</th>
+          <th>Status</th>
+          <th>Notes</th>
+          <th>Reminder</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="section" id="maintenanceSection">
+    <h2>Maintenance Log</h2>
+    <button class="btn" onclick="addMaintenanceRow()">Add Maintenance Record</button>
+    <table id="maintenanceTable">
+      <thead>
+        <tr>
+          <th>Unit</th>
+          <th>Issue</th>
+          <th>Status</th>
+          <th>Date Reported</th>
+          <th>Resolution Notes</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
-  // Function to add a row to Rent Table
+  function scrollToSection(id) {
+    const section = document.getElementById(id);
+    if (section) {
+      section.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  function addTenantRow() {
+    const tableBody = document.querySelector("#tenantTable tbody");
+    const row = document.createElement("tr");
+    row.innerHTML = \`
+      <td contenteditable="true">Tenant Name</td>
+      <td contenteditable="true">Unit #</td>
+      <td contenteditable="true">tenant@email.com</td>
+      <td contenteditable="true">YYYY-MM-DD</td>
+      <td contenteditable="true">YYYY-MM-DD</td>
+      <td><textarea placeholder="Lease notes..."></textarea></td>
+      <td><button class="btn" onclick="deleteRow(this)">Delete</button></td>
+    \`;
+    tableBody.appendChild(row);
+  }
+
   function addRentRow() {
     const tableBody = document.querySelector("#rentTable tbody");
     const row = document.createElement("tr");
-
     row.innerHTML = \`
       <td contenteditable="true">Tenant Name</td>
       <td contenteditable="true">Unit #</td>
@@ -74,15 +201,12 @@
       <td><button class="btn" onclick="alert('Email feature is disabled.')">Send</button></td>
       <td><button class="btn" onclick="deleteRow(this)">Delete</button></td>
     \`;
-
     tableBody.appendChild(row);
   }
 
-  // Function to add a row to Maintenance Table
   function addMaintenanceRow() {
     const tableBody = document.querySelector("#maintenanceTable tbody");
     const row = document.createElement("tr");
-
     row.innerHTML = \`
       <td contenteditable="true">Unit #</td>
       <td contenteditable="true">Issue Description</td>
@@ -91,13 +215,11 @@
       <td><textarea placeholder="Resolution notes..."></textarea></td>
       <td><button class="btn" onclick="deleteRow(this)">Delete</button></td>
     \`;
-
     tableBody.appendChild(row);
   }
 
-  // Function to delete a row from any table
-  function deleteRow(button) {
-    const row = button.closest("tr");
+  function deleteRow(btn) {
+    const row = btn.closest("tr");
     row.remove();
   }
 </script>
