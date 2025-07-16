@@ -1,29 +1,57 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Hazel Street Rental Manager</title>
-  <style>
-    :root {
-      --primary: #4e73df;
-      --primary-dark: #2e59d9;
-      --bg: #f8f9fc;
-      --card-bg: #ffffff;
-      --text: #5a5c69;
+  <script src="https://cdn.jsdelivr.net/npm/chart.js">
+function checkLeaseExpirations() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = document.querySelectorAll('#tenantTable tbody tr');
+  rows.forEach(row => {
+    const endDateInput = row.querySelectorAll('input[type="date"]')[1];
+    if (endDateInput && endDateInput.value && endDateInput.value < today) {
+      row.style.backgroundColor = "#ffe5e5"; // Light red background
+      if (!row.dataset.alerted) {
+        alert(`Lease expired for: ${row.children[0].textContent}`);
+        row.dataset.alerted = "true";
+      }
     }
+  });
+}
+setInterval(checkLeaseExpirations, 10000);
 
+
+function checkOverdueMaintenance() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = document.querySelectorAll('#maintenanceTable tbody tr');
+  rows.forEach(row => {
+    const status = row.querySelector('select')?.value;
+    const targetDate = row.querySelectorAll('input[type="date"]')[1];
+    if (status !== 'Resolved' && targetDate?.value && targetDate.value < today) {
+      row.style.backgroundColor = "#fff3cd"; // light yellow for overdue
+      if (!row.dataset.reminded) {
+        alert(`⚠️ Overdue maintenance for unit: ${row.children[0].textContent}`);
+        row.dataset.reminded = "true";
+      }
+    }
+  });
+}
+setInterval(checkOverdueMaintenance, 10000);
+
+</script>
+  <style>
     body {
       margin: 0;
       font-family: 'Segoe UI', sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      background: #f8f9fc;
+      color: #5a5c69;
       display: flex;
     }
-
     .sidebar {
       width: 240px;
-      background: var(--primary);
+      background: #4e73df;
       color: white;
       height: 100vh;
       position: fixed;
@@ -32,98 +60,64 @@
       padding: 20px 10px;
       box-shadow: 2px 0 5px rgba(0,0,0,0.1);
     }
-
     .sidebar h2 {
-      color: #fff;
-      font-size: 22px;
-      margin-bottom: 30px;
       text-align: center;
+      margin-bottom: 30px;
     }
-
     .sidebar button {
       background: none;
       border: none;
       color: #e2e6ea;
-      text-align: left;
-      padding: 12px 20px;
-      font-size: 16px;
-      cursor: pointer;
+      padding: 10px;
       width: 100%;
-      transition: background 0.2s;
+      text-align: left;
+      cursor: pointer;
     }
-
-    .sidebar button:hover,
-    .sidebar button.active {
-      background: var(--primary-dark);
-      color: #fff;
+    .sidebar button:hover, .sidebar button.active {
+      background: #2e59d9;
+      color: white;
     }
-
     .main {
       margin-left: 260px;
       padding: 30px;
       flex: 1;
     }
-
     .section {
       display: none;
-      background: var(--card-bg);
-      padding: 25px;
-      margin-bottom: 30px;
+      background: white;
+      padding: 20px;
       border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
-
     .section.active {
       display: block;
     }
-
-    .section h2 {
+    h2 {
       margin-top: 0;
-      color: var(--primary);
-      font-size: 22px;
-      border-bottom: 2px solid var(--primary);
+      color: #4e73df;
+      border-bottom: 2px solid #4e73df;
       padding-bottom: 5px;
     }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-      font-size: 14px;
-    }
-
-    th, td {
-      padding: 12px 10px;
-      border: 1px solid #dee2e6;
-    }
-
-    th {
-      background-color: #f1f3f9;
-      color: #343a40;
-    }
-
     .btn {
-      padding: 6px 12px;
-      margin: 5px 0;
-      cursor: pointer;
-      border: none;
-      background: var(--primary);
+      background: #4e73df;
       color: white;
+      border: none;
+      padding: 8px 12px;
+      cursor: pointer;
       border-radius: 4px;
       font-size: 14px;
     }
-
-    .btn:hover {
-      background: var(--primary-dark);
-    }
-
-    textarea {
+    table {
       width: 100%;
-      height: 50px;
-      resize: vertical;
-      font-family: inherit;
-      padding: 6px;
-      font-size: 13px;
+      margin-top: 15px;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+    }
+    th {
+      background: #f1f3f9;
     }
   </style>
 </head>
@@ -132,124 +126,201 @@
 <div class="sidebar">
   <h2>Hazel Street</h2>
   <button class="tab-btn active" onclick="showSection('tenantSection', this)">👥 Tenants</button>
-  <button class="tab-btn" onclick="showSection('rentSection', this)">🏠 Rent Payments</button>
+  <button class="tab-btn" onclick="showSection('rentSection', this)">🏠 Rent</button>
   <button class="tab-btn" onclick="showSection('maintenanceSection', this)">🛠 Maintenance</button>
+  <button class="tab-btn" onclick="showSection('reportSection', this)">📊 Reports</button>
 </div>
 
 <div class="main">
   <div class="section active" id="tenantSection">
-    <h2>Tenant Directory</h2>
-    <button class="btn" id="addTenantBtn">Add Tenant</button>
+    <h2>Tenants</h2>
+    <button class="btn" onclick="addTenantRow()">Add Tenant</button>
     <table id="tenantTable">
       <thead>
-        <tr><th>Name</th><th>Unit</th><th>Email</th><th>Lease Start</th><th>Lease End</th><th>Notes</th><th>Actions</th></tr>
+        <tr><th>Name</th><th>Unit</th><th>Email</th><th>Lease Start</th><th>Lease End</th><th>Actions</th></tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
 
   <div class="section" id="rentSection">
-    <h2>Rent Payments</h2>
-    <button class="btn" id="addRentBtn">Add Rent Record</button>
+    <h2>Rent</h2>
+    <button class="btn" onclick="addRentRow()">Add Rent</button>
     <table id="rentTable">
       <thead>
-        <tr><th>Tenant</th><th>Unit</th><th>Amount (TTD)</th><th>Due Date</th><th>Status</th><th>Notes</th><th>Reminder</th><th>Actions</th></tr>
+        <tr><th>Tenant</th><th>Unit</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Reminder</th><th>Actions</th></tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
 
   <div class="section" id="maintenanceSection">
-    <h2>Maintenance Log</h2>
-    <button class="btn" id="addMaintenanceBtn">Add Maintenance Record</button>
+    <h2>Maintenance</h2>
+    <button class="btn" onclick="addMaintenanceRow()">Add Maintenance</button>
     <table id="maintenanceTable">
       <thead>
-        <tr><th>Unit</th><th>Issue</th><th>Status</th><th>Date Reported</th><th>Resolution Notes</th><th>Actions</th></tr>
+        <tr><th>Unit</th><th>Issue</th><th>Status</th><th>Date Reported</th><th>Target Completion</th><th>Actions</th></tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
+
+  <div class="section" id="reportSection">
+    <h2>Reports</h2>
+    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+      <div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #4e73df; border-radius:5px;">
+        <strong>Total Tenants:</strong> <span id="reportTotalTenants">0</span>
+      </div>
+      <div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #1cc88a; border-radius:5px;">
+        <strong>Total Rent Records:</strong> <span id="reportTotalRent">0</span>
+      </div>
+      <div style="flex:1; padding:15px; background:#f8f9fc; border-left:4px solid #e74a3b; border-radius:5px;">
+        <strong>Overdue Maintenance:</strong> <span id="reportOverdueMaint">0</span>
+      </div>
+    </div>
+    <canvas id="rentChart" width="400" height="200"></canvas>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js">
+function checkLeaseExpirations() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = document.querySelectorAll('#tenantTable tbody tr');
+  rows.forEach(row => {
+    const endDateInput = row.querySelectorAll('input[type="date"]')[1];
+    if (endDateInput && endDateInput.value && endDateInput.value < today) {
+      row.style.backgroundColor = "#ffe5e5"; // Light red background
+      if (!row.dataset.alerted) {
+        alert(`Lease expired for: ${row.children[0].textContent}`);
+        row.dataset.alerted = "true";
+      }
+    }
+  });
+}
+setInterval(checkLeaseExpirations, 10000);
+
+
+function checkOverdueMaintenance() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = document.querySelectorAll('#maintenanceTable tbody tr');
+  rows.forEach(row => {
+    const status = row.querySelector('select')?.value;
+    const targetDate = row.querySelectorAll('input[type="date"]')[1];
+    if (status !== 'Resolved' && targetDate?.value && targetDate.value < today) {
+      row.style.backgroundColor = "#fff3cd"; // light yellow for overdue
+      if (!row.dataset.reminded) {
+        alert(`⚠️ Overdue maintenance for unit: ${row.children[0].textContent}`);
+        row.dataset.reminded = "true";
+      }
+    }
+  });
+}
+setInterval(checkOverdueMaintenance, 10000);
+
+</script>
 <script>
 function showSection(id, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-}
-
-function createCell(content = '', editable = true) {
-  const cell = document.createElement('td');
-  if (editable) cell.setAttribute('contenteditable', 'true');
-  cell.innerText = content;
-  return cell;
-}
-
-function createTextAreaCell(placeholder = '') {
-  const cell = document.createElement('td');
-  const textarea = document.createElement('textarea');
-  textarea.placeholder = placeholder;
-  cell.appendChild(textarea);
-  return cell;
-}
-
-function createDeleteCell() {
-  const cell = document.createElement('td');
-  const btn = document.createElement('button');
-  btn.className = 'btn';
-  btn.textContent = 'Delete';
-  btn.onclick = function() { this.closest('tr').remove(); };
-  cell.appendChild(btn);
-  return cell;
+  if (id === 'reportSection') generateReport();
 }
 
 function addTenantRow() {
   const row = document.createElement('tr');
-  row.appendChild(createCell('Tenant Name'));
-  row.appendChild(createCell('Unit #'));
-  row.appendChild(createCell('tenant@email.com'));
-  row.appendChild(createCell('YYYY-MM-DD'));
-  row.appendChild(createCell('YYYY-MM-DD'));
-  row.appendChild(createTextAreaCell('Lease notes...'));
-  row.appendChild(createDeleteCell());
+  row.innerHTML = '<td contenteditable>Tenant Name</td><td contenteditable>Unit</td><td contenteditable>email@example.com</td><td><input type="date"></td><td><input type="date"></td><td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
   document.querySelector('#tenantTable tbody').appendChild(row);
 }
 
 function addRentRow() {
   const row = document.createElement('tr');
-  row.appendChild(createCell('Tenant Name'));
-  row.appendChild(createCell('Unit #'));
-  row.appendChild(createCell('0.00'));
-  row.appendChild(createCell('YYYY-MM-DD'));
-  row.appendChild(createCell('Pending'));
-  row.appendChild(createTextAreaCell('Payment notes...'));
-  const reminderCell = document.createElement('td');
-  const btn = document.createElement('button');
-  btn.className = 'btn';
-  btn.textContent = 'Send';
-  btn.onclick = () => alert('Email feature is disabled.');
-  reminderCell.appendChild(btn);
-  row.appendChild(reminderCell);
-  row.appendChild(createDeleteCell());
+  row.innerHTML = '<td contenteditable>Name</td><td contenteditable>Unit</td><td contenteditable>1000</td><td><input type="date"></td>' +
+                  '<td><select><option>Pending</option><option>Paid</option><option>Overdue</option></select></td>' +
+                  '<td><button class="btn" onclick="alert(\'Reminder sent\')">Send</button></td>' +
+                  '<td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
   document.querySelector('#rentTable tbody').appendChild(row);
 }
 
 function addMaintenanceRow() {
   const row = document.createElement('tr');
-  row.appendChild(createCell('Unit #'));
-  row.appendChild(createCell('Issue Description'));
-  row.appendChild(createCell('Open'));
-  row.appendChild(createCell('YYYY-MM-DD'));
-  row.appendChild(createTextAreaCell('Resolution notes...'));
-  row.appendChild(createDeleteCell());
+  row.innerHTML = '<td contenteditable>Unit</td><td contenteditable>Issue</td>' + '<td><select><option>Open</option><option>In Progress</option><option>Resolved</option></select></td>' + '<td><input type="date"></td>' + '<td><input type="date"></td>' + 
+                  '<td><select><option>Open</option><option>In Progress</option><option>Resolved</option></select></td>' +
+                  '<td><input type="date"></td>' +
+                  '<td><button class="btn" onclick="this.closest(\'tr\').remove()">Delete</button></td>';
   document.querySelector('#maintenanceTable tbody').appendChild(row);
 }
 
-document.getElementById('addTenantBtn').onclick = addTenantRow;
-document.getElementById('addRentBtn').onclick = addRentRow;
-document.getElementById('addMaintenanceBtn').onclick = addMaintenanceRow;
+function generateReport() {
+  document.getElementById('reportTotalTenants').textContent = document.querySelectorAll('#tenantTable tbody tr').length;
+  document.getElementById('reportTotalRent').textContent = document.querySelectorAll('#rentTable tbody tr').length;
+  const today = new Date().toISOString().split('T')[0];
+  let overdueCount = 0;
+  document.querySelectorAll('#maintenanceTable tbody tr').forEach(row => {
+    const status = row.querySelector('select')?.value;
+    const target = row.querySelectorAll('input[type="date"]')[1];
+    if (status !== 'Resolved' && target && target.value < today) {
+      overdueCount++;
+    }
+  });
+  document.getElementById('reportOverdueMaint').textContent = overdueCount;
+  const statuses = ['Pending', 'Paid', 'Overdue'];
+  const counts = [0, 0, 0];
+  document.querySelectorAll('#rentTable tbody tr').forEach(row => {
+    const status = row.querySelector('select')?.value;
+    const idx = statuses.indexOf(status);
+    if (idx > -1) counts[idx]++;
+  });
+
+  const ctx = document.getElementById('rentChart').getContext('2d');
+  if (window.rentChart) window.rentChart.destroy();
+  window.rentChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: statuses,
+      datasets: [{
+        label: 'Rent Status',
+        data: counts,
+        backgroundColor: ['#f6c23e', '#1cc88a', '#e74a3b']
+      }]
+    }
+  });
+}
+
+function checkLeaseExpirations() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = document.querySelectorAll('#tenantTable tbody tr');
+  rows.forEach(row => {
+    const endDateInput = row.querySelectorAll('input[type="date"]')[1];
+    if (endDateInput && endDateInput.value && endDateInput.value < today) {
+      row.style.backgroundColor = "#ffe5e5"; // Light red background
+      if (!row.dataset.alerted) {
+        alert(`Lease expired for: ${row.children[0].textContent}`);
+        row.dataset.alerted = "true";
+      }
+    }
+  });
+}
+setInterval(checkLeaseExpirations, 10000);
+
+
+function checkOverdueMaintenance() {
+  const today = new Date().toISOString().split('T')[0];
+  const rows = document.querySelectorAll('#maintenanceTable tbody tr');
+  rows.forEach(row => {
+    const status = row.querySelector('select')?.value;
+    const targetDate = row.querySelectorAll('input[type="date"]')[1];
+    if (status !== 'Resolved' && targetDate?.value && targetDate.value < today) {
+      row.style.backgroundColor = "#fff3cd"; // light yellow for overdue
+      if (!row.dataset.reminded) {
+        alert(`⚠️ Overdue maintenance for unit: ${row.children[0].textContent}`);
+        row.dataset.reminded = "true";
+      }
+    }
+  });
+}
+setInterval(checkOverdueMaintenance, 10000);
+
 </script>
 
 </body>
